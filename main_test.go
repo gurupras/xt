@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io/fs"
 	"os"
@@ -571,4 +573,20 @@ func TestControlCharsEscaped(t *testing.T) {
 			t.Errorf("%s: name not escaped:\n%q", flags, out)
 		}
 	}
+}
+
+func TestDeleteKeepsLongNamePartial(t *testing.T) {
+	needRemote(t)
+	d := t.TempDir()
+	src, dst := filepath.Join(d, "src"), filepath.Join(d, "dst")
+	name := strings.Repeat("n", 220)
+	data := random(2 << 20)
+	write(t, filepath.Join(src, name), data)
+	sum := sha256.Sum256([]byte(name))
+	write(t, filepath.Join(dst, ".xt-"+hex.EncodeToString(sum[:12])+".xt-partial"), data[:1500_000])
+	out := mustXT(t, "-a", "--stats", "--partial", "--delete", src+"/", "remote:"+dst)
+	if lit := stat(t, out, "Literal data"); lit != int64(len(data)-1500_000) {
+		t.Errorf("literal data %d, want only the remainder %d", lit, len(data)-1500_000)
+	}
+	sameTree(t, src, dst)
 }

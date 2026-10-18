@@ -70,14 +70,6 @@ func tempName(target, suffix string) string {
 	return filepath.Join(dir, name)
 }
 
-// partialOrigin returns the file name a partial file belongs to.
-func partialOrigin(name string) (string, bool) {
-	if !strings.HasPrefix(name, ".") || !strings.HasSuffix(name, partialSuffix) {
-		return "", false
-	}
-	return name[1 : len(name)-len(partialSuffix)], true
-}
-
 func hasTrailingSep(p string) bool {
 	if strings.HasSuffix(p, "/") || strings.HasSuffix(p, "/.") || p == "." {
 		return true

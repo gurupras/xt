@@ -46,6 +46,7 @@ type Receiver struct {
 	root     string
 	single   bool // destination names a single file
 	listed   map[string]bool
+	partials map[string]bool // partial-file names of listed files, kept by --delete
 	badName  map[int]error   // entries whose names this OS cannot represent
 	dirs     map[string]bool // directories verified safe to write into
 	dirFixes []dirFix
@@ -122,7 +123,11 @@ func (r *Receiver) Run() error {
 	}
 	r.UI.Listed(int64(len(r.files)))
 	r.listed = make(map[string]bool, len(r.files))
+	r.partials = make(map[string]bool)
 	for i, e := range r.files {
+		if e.Type == proto.TypeFile && e.Path != "." {
+			r.partials[path.Join(path.Dir(e.Path), filepath.Base(tempName(path.Base(e.Path), partialSuffix)))] = true
+		}
 		if err := validRel(e.Path); err != nil {
 			return fmt.Errorf("refusing file list: %w", err)
 		}
@@ -550,7 +555,7 @@ func (r *Receiver) deleteExtraneous(rel, dir string) {
 		if r.listed[child] {
 			continue
 		}
-		if orig, ok := partialOrigin(name); ok && r.listed[join(orig)] {
+		if r.partials[child] {
 			continue
 		}
 		if r.filt.Excluded(child, de.IsDir()) && !r.Opts.DeleteExcluded {
