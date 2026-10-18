@@ -927,7 +927,10 @@ func (r *Receiver) begin(j *job, resumeFrom int64) *active {
 			a.err = errors.New("protocol error: unexpected resume offset")
 			return a
 		}
-		a.f, err = os.OpenFile(j.partial, os.O_WRONLY, 0)
+		a.f, err = os.OpenFile(j.partial, os.O_WRONLY|oNoFollow, 0)
+		if err == nil {
+			err = sameRegular(a.f, j.partial)
+		}
 		if err == nil {
 			err = a.f.Truncate(resumeFrom)
 		}
@@ -939,7 +942,12 @@ func (r *Receiver) begin(j *job, resumeFrom int64) *active {
 			r.UI.Info("%s: resuming at %s", a.e.Path, humanBytes(resumeFrom))
 		}
 	} else {
-		a.f, err = os.OpenFile(j.partial, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
+		// Never write through whatever is at the partial name: the file
+		// list may have placed a symlink there to redirect the write
+		// outside the destination. O_EXCL refuses to follow symlinks.
+		if err = os.Remove(j.partial); err == nil || errors.Is(err, fs.ErrNotExist) {
+			a.f, err = os.OpenFile(j.partial, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+		}
 		a.h = sha256.New()
 	}
 	if err != nil {
@@ -969,6 +977,23 @@ func (r *Receiver) begin(j *job, resumeFrom int64) *active {
 	}
 	a.ap = delta.NewApplier(basis, j.sig, w)
 	return a
+}
+
+// sameRegular checks that f, opened from p, is the regular file at p and
+// not something a symlink led to.
+func sameRegular(f *os.File, p string) error {
+	fst, err := f.Stat()
+	if err != nil {
+		return err
+	}
+	lst, err := os.Lstat(p)
+	if err != nil {
+		return err
+	}
+	if !fst.Mode().IsRegular() || !os.SameFile(fst, lst) {
+		return fmt.Errorf("%s is not a regular file", filepath.Base(p))
+	}
+	return nil
 }
 
 func (r *Receiver) apply(a *active, ops []delta.Op) {

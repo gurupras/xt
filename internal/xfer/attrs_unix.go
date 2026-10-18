@@ -24,6 +24,9 @@ func ownerOf(fi fs.FileInfo) (uid, gid uint32, ok bool) {
 
 func isRoot() bool { return os.Geteuid() == 0 }
 
+// oNoFollow makes OpenFile fail on a symlink instead of following it.
+const oNoFollow = syscall.O_NOFOLLOW
+
 // devOf returns the device a file lives on, for --one-file-system.
 func devOf(fi fs.FileInfo) (uint64, bool) {
 	st, ok := fi.Sys().(*syscall.Stat_t)

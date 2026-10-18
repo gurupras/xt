@@ -161,6 +161,38 @@ func TestSymlinkEscape(t *testing.T) {
 	}
 }
 
+// A symlink listed under another file's partial name must not redirect that
+// file's data outside the destination.
+func TestPartialSymlinkEscape(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlinks need privileges on Windows")
+	}
+	dest := filepath.Join(t.TempDir(), "d")
+	victim := filepath.Join(t.TempDir(), "victim")
+	if err := os.WriteFile(victim, []byte("safe"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"foo", strings.Repeat("a", 220)} {
+		partial := filepath.Base(tempName(filepath.Join(dest, name), partialSuffix))
+		peer(t, dest, func(c *proto.Conn) error {
+			if err := list(c,
+				proto.FileEntry{Path: ".", Type: proto.TypeDir, Mode: 0o755},
+				proto.FileEntry{Path: partial, Type: proto.TypeSymlink, Link: victim},
+				proto.FileEntry{Path: name, Type: proto.TypeFile, Mode: 0o644, Size: 1}); err != nil {
+				return err
+			}
+			return serveX(c)
+		})
+		if b, _ := os.ReadFile(victim); string(b) != "safe" {
+			t.Fatalf("%s: victim overwritten with %q", name, b)
+		}
+		st, err := os.Lstat(filepath.Join(dest, name))
+		if err != nil || !st.Mode().IsRegular() {
+			t.Fatalf("%s: want a regular file, got %v %v", name, st, err)
+		}
+	}
+}
+
 // A corrupted transfer is retried once from scratch.
 func TestChecksumMismatchRedo(t *testing.T) {
 	dest := t.TempDir()
