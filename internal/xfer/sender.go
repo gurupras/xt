@@ -403,7 +403,7 @@ func (l *lister) entry(rel, abs string, fi fs.FileInfo) (proto.FileEntry, bool) 
 	case m&fs.ModeSymlink != 0:
 		if !l.o.Links {
 			if l.o.Verbose > 0 {
-				l.ui.Info("skipping non-regular file %q", rel)
+				l.ui.Info("skipping non-regular file \"%s\"", rel)
 			}
 			return e, false
 		}
@@ -416,7 +416,7 @@ func (l *lister) entry(rel, abs string, fi fs.FileInfo) (proto.FileEntry, bool) 
 		e.Link = target
 	default:
 		if l.o.Verbose > 0 {
-			l.ui.Info("skipping non-regular file %q", rel)
+			l.ui.Info("skipping non-regular file \"%s\"", rel)
 		}
 		return e, false
 	}

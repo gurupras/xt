@@ -161,9 +161,38 @@ func (u *UI) emit(text string, isErr bool) {
 	if isErr {
 		w = u.errw
 	}
-	fmt.Fprintln(w, text)
+	fmt.Fprintln(w, escapeControls(text))
 	u.drawLocked()
 }
+
+// escapeControls makes text safe for the terminal the way rsync does: a
+// control character other than tab becomes \#ooo (octal), and so does the
+// backslash of a literal "\#ooo" so the output stays unambiguous. File
+// names, symlink targets and messages from the peer all pass through here.
+func escapeControls(s string) string {
+	var b strings.Builder
+	start := 0
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c == '\\' {
+			if r := s[i+1:]; !(len(r) >= 4 && r[0] == '#' && isDigit(r[1]) && isDigit(r[2]) && isDigit(r[3])) {
+				continue
+			}
+		} else if c >= ' ' || c == '\t' {
+			continue
+		}
+		b.WriteString(s[start:i])
+		fmt.Fprintf(&b, `\#%03o`, c)
+		start = i + 1
+	}
+	if start == 0 {
+		return s
+	}
+	b.WriteString(s[start:])
+	return b.String()
+}
+
+func isDigit(c byte) bool { return c >= '0' && c <= '9' }
 
 // Phase sets the status shown before data starts flowing.
 func (u *UI) Phase(p string) {
@@ -357,7 +386,7 @@ func (u *UI) statusLocked(width int) string {
 	}
 	stats = strings.Replace(stats, "%BAR%", bar(pct, barW), 1)
 	if rest := width - utf8.RuneCountInString(stats) - 2; rest > 8 && t.cur != "" {
-		stats += "  " + truncLeft(t.cur, rest)
+		stats += "  " + truncLeft(escapeControls(t.cur), rest)
 	}
 	return truncRight(stats, width)
 }

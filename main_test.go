@@ -558,3 +558,17 @@ func TestHardLinkFollowerFilters(t *testing.T) {
 		t.Error("--existing created a follower")
 	}
 }
+
+func TestControlCharsEscaped(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("control characters are not allowed in Windows names")
+	}
+	d := t.TempDir()
+	write(t, filepath.Join(d, "src", "a\x1b[31mb"), []byte("x"))
+	for _, flags := range []string{"-av", "-ai", "--list-only"} {
+		out := mustXT(t, flags, filepath.Join(d, "src")+"/", filepath.Join(d, "dst"+flags))
+		if strings.Contains(out, "\x1b") || !strings.Contains(out, `a\#033[31mb`) {
+			t.Errorf("%s: name not escaped:\n%q", flags, out)
+		}
+	}
+}
