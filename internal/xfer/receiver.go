@@ -45,6 +45,7 @@ type Receiver struct {
 	filt     *filter.List
 	root     string
 	single   bool // destination names a single file
+	madeRoot bool // setupDest created the destination directory
 	listed   map[string]bool
 	partials map[string]bool // partial-file names of listed files, kept by --delete
 	badName  map[int]error   // entries whose names this OS cannot represent
@@ -198,7 +199,7 @@ func (r *Receiver) setupDest() error {
 		return nil
 	}
 	if r.Opts.DryRun {
-		r.UI.Info("created directory %s", dest)
+		r.createdRoot(dest)
 		return nil
 	}
 	mkdir := os.Mkdir
@@ -211,8 +212,18 @@ func (r *Receiver) setupDest() error {
 		}
 		return err
 	}
-	r.UI.Info("created directory %s", dest)
+	r.createdRoot(dest)
 	return nil
+}
+
+func (r *Receiver) createdRoot(dest string) {
+	r.madeRoot = true
+	if r.Opts.Verbose > 0 || r.Opts.Itemize > 0 {
+		if d := strings.TrimRight(dest, `/\`); d != "" {
+			dest = d
+		}
+		r.UI.Info("created directory %s", dest)
+	}
 }
 
 // list prints the file list instead of transferring it (--list-only).
@@ -416,20 +427,29 @@ func (r *Receiver) arrow() string {
 
 // itemize prints an --itemize-changes line. code is the two-letter update
 // type; st is the existing item, or nil if it is being created. Items with
-// no changes are only shown with -ii.
+// no changes are only shown with -ii. Without -i, -v lists the directories
+// that would get a line, as rsync does.
 func (r *Receiver) itemize(code string, e *proto.FileEntry, st fs.FileInfo, xfer bool) {
-	if r.Opts.Itemize == 0 {
+	dirName := r.Opts.Itemize == 0 && r.Opts.Verbose > 0 && e.Type == proto.TypeDir
+	if r.Opts.Itemize == 0 && !dirName {
 		return
 	}
 	name := e.Path
-	if e.Type == proto.TypeDir && name != "." {
-		name += "/"
+	if e.Type == proto.TypeDir {
+		name = strings.TrimSuffix(name, ".") + "/"
+		if name == "/" {
+			name = "./"
+		}
 	}
 	if e.Type == proto.TypeSymlink {
 		name += " -> " + e.Link
 	}
 	if st == nil {
-		r.UI.Info("%s+++++++++ %s", code, name)
+		if dirName {
+			r.UI.Info("%s", name)
+		} else {
+			r.UI.Info("%s+++++++++ %s", code, name)
+		}
 		return
 	}
 	f := []byte(".........")
@@ -439,7 +459,8 @@ func (r *Receiver) itemize(code string, e *proto.FileEntry, st fs.FileInfo, xfer
 	if e.Type == proto.TypeFile && st.Size() != e.Size {
 		f[1] = 's'
 	}
-	if !(e.Type == proto.TypeDir && r.Opts.OmitDirTimes) && e.Type != proto.TypeSymlink && !r.sameTime(st.ModTime(), e.MTime) {
+	// Without -t rsync leaves directory times alone and does not compare them.
+	if !(e.Type == proto.TypeDir && (r.Opts.OmitDirTimes || !r.Opts.Times)) && e.Type != proto.TypeSymlink && !r.sameTime(st.ModTime(), e.MTime) {
 		f[2] = 'T'
 		if r.Opts.Times {
 			f[2] = 't'
@@ -463,6 +484,10 @@ func (r *Receiver) itemize(code string, e *proto.FileEntry, st fs.FileInfo, xfer
 		}
 		flags = "         "
 	}
+	if dirName {
+		r.UI.Info("%s", name)
+		return
+	}
 	r.UI.Info("%s%s %s", code, flags, name)
 }
 
@@ -485,7 +510,9 @@ func (r *Receiver) prepareDir(i int, target string, st fs.FileInfo, exists bool)
 	dry := r.Opts.DryRun
 	if e.Path == "." {
 		// The destination root, already set up by setupDest.
-		if st != nil {
+		if r.madeRoot {
+			r.itemize("cd", e, nil, false)
+		} else if st != nil {
 			r.itemize(".d", e, st, false)
 		}
 		r.dirFixes = append(r.dirFixes, dirFix{idx: i, path: target})
@@ -515,9 +542,6 @@ func (r *Receiver) prepareDir(i int, target string, st fs.FileInfo, exists bool)
 			}
 		}
 		r.itemize("cd", e, nil, false)
-		if r.Opts.Verbose > 0 && r.Opts.Itemize == 0 {
-			r.UI.Info("%s/", e.Path)
-		}
 	} else {
 		r.itemize(".d", e, st, false)
 	}

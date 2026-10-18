@@ -400,11 +400,10 @@ func (l *lister) entry(rel, abs string, fi fs.FileInfo) (proto.FileEntry, bool) 
 		}
 	case m.IsDir():
 		e.Type = proto.TypeDir
+		e.Size = fi.Size() // only shown by --list-only, as in rsync
 	case m&fs.ModeSymlink != 0:
 		if !l.o.Links {
-			if l.o.Verbose > 0 {
-				l.ui.Info("skipping non-regular file \"%s\"", rel)
-			}
+			l.ui.Info("skipping non-regular file \"%s\"", rel)
 			return e, false
 		}
 		target, err := os.Readlink(abs)
@@ -414,10 +413,9 @@ func (l *lister) entry(rel, abs string, fi fs.FileInfo) (proto.FileEntry, bool) 
 		}
 		e.Type = proto.TypeSymlink
 		e.Link = target
+		e.Size = fi.Size()
 	default:
-		if l.o.Verbose > 0 {
-			l.ui.Info("skipping non-regular file \"%s\"", rel)
-		}
+		l.ui.Info("skipping non-regular file \"%s\"", rel)
 		return e, false
 	}
 	if l.chmod != nil && e.Type != proto.TypeSymlink {

@@ -590,3 +590,53 @@ func TestDeleteKeepsLongNamePartial(t *testing.T) {
 	}
 	sameTree(t, src, dst)
 }
+
+func TestDirOutputLikeRsync(t *testing.T) {
+	d := t.TempDir()
+	src, dst := filepath.Join(d, "src"), filepath.Join(d, "dst")
+	write(t, filepath.Join(src, "sub", "f"), []byte("x"))
+	if out := mustXT(t, "-a", src+"/", dst+"/"); strings.Contains(out, "created directory") {
+		t.Errorf("created directory printed without -v:\n%s", out)
+	}
+	os.RemoveAll(dst)
+	out := mustXT(t, "-ai", src+"/", dst+"/")
+	for _, want := range []string{"created directory " + dst + "\n", "cd+++++++++ ./\n"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("-ai: missing %q in:\n%s", want, out)
+		}
+	}
+	os.RemoveAll(dst)
+	if out := mustXT(t, "-av", src+"/", dst); !strings.Contains(out, "\n./\n") {
+		t.Errorf("-av did not list ./:\n%s", out)
+	}
+	// Without -t directory times are not compared, so nothing is itemized.
+	os.RemoveAll(dst)
+	mustXT(t, "-r", src+"/", dst)
+	touch(t, filepath.Join(dst, "sub"), -time.Hour)
+	if out := mustXT(t, "-ri", src+"/", dst); strings.Contains(out, ".d") {
+		t.Errorf("-ri itemized a directory time:\n%s", out)
+	}
+	if runtime.GOOS != "windows" {
+		fi, err := os.Stat(src)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if out := mustXT(t, "--list-only", src+"/"); !strings.Contains(out, commaInt(fi.Size())+" ") {
+			t.Errorf("--list-only did not show the directory size %d:\n%s", fi.Size(), out)
+		}
+		if err := os.Symlink("f", filepath.Join(src, "l")); err != nil {
+			t.Fatal(err)
+		}
+		if out := mustXT(t, "-r", src+"/", dst); !strings.Contains(out, `skipping non-regular file "l"`) {
+			t.Errorf("-r without -l did not report the symlink:\n%s", out)
+		}
+	}
+}
+
+func commaInt(n int64) string {
+	s := strconv.FormatInt(n, 10)
+	for i := len(s) - 3; i > 0; i -= 3 {
+		s = s[:i] + "," + s[i:]
+	}
+	return s
+}
