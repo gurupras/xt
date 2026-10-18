@@ -129,6 +129,10 @@ func (r *Receiver) Run() error {
 		if r.listed[e.Path] || (e.Path == "." && i != 0) {
 			return fmt.Errorf("refusing file list: duplicate entry %q", e.Path)
 		}
+		if e.Path == "." && e.Type != proto.TypeDir {
+			// "." is the destination root, which must stay a directory.
+			return errors.New("refusing file list: \".\" is not a directory")
+		}
 		r.listed[e.Path] = true
 		if l := e.HardLink; l != 0 && (l < 1 || int(l) > i || r.files[l-1].Type != proto.TypeFile || r.files[l-1].HardLink != 0 || e.Type != proto.TypeFile) {
 			return fmt.Errorf("refusing file list: bad hard link on %q", e.Path)

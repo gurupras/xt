@@ -193,6 +193,32 @@ func TestPartialSymlinkEscape(t *testing.T) {
 	}
 }
 
+// "." is the destination root; a peer must not be able to turn it into a
+// symlink or file.
+func TestRootMustBeDir(t *testing.T) {
+	for _, typ := range []proto.FileType{proto.TypeSymlink, proto.TypeFile} {
+		dest := t.TempDir()
+		keep := filepath.Join(dest, "keep")
+		if err := os.WriteFile(keep, nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		err := peer(t, dest, func(c *proto.Conn) error {
+			if err := list(c,
+				proto.FileEntry{Path: ".", Type: typ, Link: t.TempDir(), Mode: 0o755, Size: 1},
+				proto.FileEntry{Path: "pwned", Type: proto.TypeFile, Mode: 0o644, Size: 1}); err != nil {
+				return err
+			}
+			return serveX(c)
+		})
+		if err == nil || !strings.Contains(err.Error(), "refusing file list") {
+			t.Errorf("type %d: got %v, want refusal", typ, err)
+		}
+		if _, err := os.Stat(keep); err != nil {
+			t.Errorf("type %d: destination contents lost: %v", typ, err)
+		}
+	}
+}
+
 // A corrupted transfer is retried once from scratch.
 func TestChecksumMismatchRedo(t *testing.T) {
 	dest := t.TempDir()
