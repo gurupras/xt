@@ -50,7 +50,7 @@ func ParseLocation(s string) (Location, error) {
 	if open := strings.IndexByte(s, '['); open >= 0 && open < colon {
 		// [ipv6]:path or user@[ipv6]:path
 		if end := strings.Index(s, "]:"); end > open {
-			return Location{Host: s[:open] + s[open+1:end], Path: s[end+2:]}, nil
+			return remoteLocation(s[:open]+s[open+1:end], s[end+2:])
 		}
 	}
 	prefix := s[:colon]
@@ -63,7 +63,17 @@ func ParseLocation(s string) (Location, error) {
 	if strings.HasPrefix(s[colon+1:], ":") {
 		return Location{}, errors.New("rsync daemon syntax (host::module) is not supported; use host:path")
 	}
-	return Location{Host: prefix, Path: s[colon+1:]}, nil
+	return remoteLocation(prefix, s[colon+1:])
+}
+
+// remoteLocation builds a remote Location. A host starting with '-' would reach
+// the remote shell as an option, so it is refused as rsync does.
+func remoteLocation(host, p string) (Location, error) {
+	name := host[strings.LastIndexByte(host, '@')+1:]
+	if strings.HasPrefix(host, "-") || strings.HasPrefix(name, "-") {
+		return Location{}, errors.New("invalid remote host: hostnames may not start with '-'")
+	}
+	return Location{Host: host, Path: p}, nil
 }
 
 // splitArgs splits a command line on whitespace, honouring quotes.
