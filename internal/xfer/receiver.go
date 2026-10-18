@@ -897,10 +897,12 @@ func (r *Receiver) receive() error {
 			if !r.Opts.DryRun {
 				r.finalizeDirs()
 			}
-			if r.Opts.RemoveSource && !r.Opts.DryRun {
-				r.syncMu.Lock()
-				synced := r.synced
-				r.syncMu.Unlock()
+			r.syncMu.Lock()
+			synced := r.synced
+			r.syncMu.Unlock()
+			// gob drops an empty slice, which would arrive as a message
+			// with no field set.
+			if len(synced) > 0 {
 				if err := r.Conn.SendAsync(&proto.Msg{Synced: synced}); err != nil {
 					return connError{err}
 				}

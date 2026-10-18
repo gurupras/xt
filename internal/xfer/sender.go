@@ -143,6 +143,10 @@ func (s *Sender) removeSources(idxs []int32) {
 		}
 		f, p := &s.files[i], s.paths[i]
 		fi, err := os.Lstat(p)
+		if err == nil && fi.Mode()&fs.ModeSymlink != 0 && s.Opts.CopyLinks {
+			// -L sent the referent: check that, but remove only the link.
+			fi, err = os.Stat(p)
+		}
 		if err != nil {
 			continue
 		}

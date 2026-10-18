@@ -468,3 +468,24 @@ func TestNoSpecialBitsWithoutPerms(t *testing.T) {
 		t.Error("-p dropped the setuid bit")
 	}
 }
+
+func TestRemoveSourceNothingSynced(t *testing.T) {
+	d := t.TempDir()
+	os.MkdirAll(filepath.Join(d, "src", "a", "b"), 0o755)
+	mustXT(t, "-a", "--remove-source-files", filepath.Join(d, "src")+"/", filepath.Join(d, "dst"))
+}
+
+func TestRemoveSourceCopyLinks(t *testing.T) {
+	needSymlinks(t)
+	d := t.TempDir()
+	write(t, filepath.Join(d, "real"), []byte("x"))
+	os.Mkdir(filepath.Join(d, "src"), 0o755)
+	os.Symlink("../real", filepath.Join(d, "src", "lnk"))
+	mustXT(t, "-rL", "--remove-source-files", filepath.Join(d, "src")+"/", filepath.Join(d, "dst"))
+	if _, err := os.Lstat(filepath.Join(d, "src", "lnk")); !os.IsNotExist(err) {
+		t.Error("source link not removed")
+	}
+	if _, err := os.Stat(filepath.Join(d, "real")); err != nil {
+		t.Error("link target was removed")
+	}
+}
