@@ -475,6 +475,26 @@ func TestRemoveSourceNothingSynced(t *testing.T) {
 	mustXT(t, "-a", "--remove-source-files", filepath.Join(d, "src")+"/", filepath.Join(d, "dst"))
 }
 
+func TestSymlinkedSourceDir(t *testing.T) {
+	needSymlinks(t)
+	d := t.TempDir()
+	write(t, filepath.Join(d, "real", "f"), []byte("x"))
+	link := filepath.Join(d, "linkdir")
+	os.Symlink("real", link)
+	for _, c := range []struct{ flags, src string }{{"-r", link + "/"}, {"-a", link + "/"}, {"-a", link + "/."}} {
+		dst := t.TempDir()
+		mustXT(t, c.flags, c.src, dst)
+		if st, err := os.Lstat(filepath.Join(dst, "f")); err != nil || !st.Mode().IsRegular() {
+			t.Errorf("xt %s %s: contents not copied (%v)", c.flags, c.src, err)
+		}
+	}
+	dst := t.TempDir()
+	mustXT(t, "-a", link, dst)
+	if st, err := os.Lstat(filepath.Join(dst, "linkdir")); err != nil || st.Mode()&fs.ModeSymlink == 0 {
+		t.Errorf("without a trailing slash the link itself should be copied (%v)", err)
+	}
+}
+
 func TestRemoveSourceCopyLinks(t *testing.T) {
 	needSymlinks(t)
 	d := t.TempDir()

@@ -437,7 +437,7 @@ func (l *lister) addSource(src string) {
 	if base == "." || base == ".." || base == string(filepath.Separator) || filepath.VolumeName(clean)+string(filepath.Separator) == clean {
 		contents = true
 	}
-	fi, err := l.stat(clean)
+	fi, err := l.stat(followTrailing(clean, src))
 	if err != nil {
 		l.warn("%s: %v", src, err)
 		return
@@ -447,6 +447,16 @@ func (l *lister) addSource(src string) {
 		rel = "."
 	}
 	l.addItem(clean, rel, fi, contents)
+}
+
+// followTrailing returns the path to stat for clean, the cleaned form of
+// src. As in rsync, "link/" names the directory a symlink points to, so the
+// separator Clean removed is put back for the stat to follow the link.
+func followTrailing(clean, src string) string {
+	if hasTrailingSep(src) && !strings.HasSuffix(clean, string(filepath.Separator)) {
+		return clean + string(filepath.Separator)
+	}
+	return clean
 }
 
 // addRelative lists src under its full path (-R). A "/./" in src marks
@@ -472,7 +482,7 @@ func (l *lister) addRelative(src string) {
 		rel = "."
 	}
 	abs := filepath.Join(root, filepath.FromSlash(rel))
-	fi, err := l.stat(abs)
+	fi, err := l.stat(followTrailing(abs, src))
 	if err != nil {
 		l.warn("%s: %v", src, err)
 		return
