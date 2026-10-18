@@ -489,7 +489,13 @@ func (r *Receiver) prepareDir(i int, target string, st fs.FileInfo, exists bool)
 	}
 	if exists && !st.IsDir() {
 		if !dry {
-			if err := os.Remove(target); err != nil {
+			var err error
+			if r.Opts.Backup {
+				err = r.backup(e.Path, target)
+			} else {
+				err = os.Remove(target)
+			}
+			if err != nil {
 				r.fail(e.Path, err)
 				return
 			}
@@ -617,7 +623,7 @@ func (r *Receiver) backup(rel, target string) error {
 			name = filepath.Base(target)
 		}
 		dst = filepath.Join(r.backupRoot(), filepath.FromSlash(name)) + r.Opts.Suffix
-		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		if err := r.mkBackupDir(filepath.Dir(dst)); err != nil {
 			return fmt.Errorf("backup: %w", err)
 		}
 	}
@@ -631,6 +637,44 @@ func (r *Receiver) backup(rel, target string) error {
 	}
 	if r.Opts.Verbose > 1 {
 		r.UI.Info("backed up %s to %s", rel, dst)
+	}
+	return nil
+}
+
+// mkBackupDir creates dir inside the --backup-dir tree. Below the
+// destination (or below the backup root, if that is elsewhere) it creates
+// one component at a time and refuses symlinks, which the sender may have
+// placed there in this or an earlier run to redirect backups.
+func (r *Receiver) mkBackupDir(dir string) error {
+	base := r.backupRoot()
+	if rel, err := filepath.Rel(r.root, base); err == nil && !r.single && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		base = r.root
+	} else if err := os.MkdirAll(base, 0o755); err != nil {
+		return err
+	}
+	rel, err := filepath.Rel(base, dir)
+	if err != nil {
+		return err
+	}
+	p := base
+	for _, c := range strings.Split(rel, string(filepath.Separator)) {
+		if c == "." {
+			continue
+		}
+		p = filepath.Join(p, c)
+		st, err := os.Lstat(p)
+		if errors.Is(err, fs.ErrNotExist) {
+			if err := os.Mkdir(p, 0o755); err != nil {
+				return err
+			}
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		if !st.IsDir() {
+			return fmt.Errorf("%s is not a directory", p)
+		}
 	}
 	return nil
 }

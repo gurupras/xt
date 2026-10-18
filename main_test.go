@@ -509,3 +509,28 @@ func TestRemoveSourceCopyLinks(t *testing.T) {
 		t.Error("link target was removed")
 	}
 }
+
+func TestBackupWhenDirReplacesFile(t *testing.T) {
+	d := t.TempDir()
+	src, dst := filepath.Join(d, "src"), filepath.Join(d, "dst")
+	write(t, filepath.Join(src, "x", "f"), []byte("new"))
+	write(t, filepath.Join(dst, "x"), []byte("old"))
+	mustXT(t, "-ab", src+"/", dst)
+	if b, err := os.ReadFile(filepath.Join(dst, "x~")); err != nil || string(b) != "old" {
+		t.Errorf("no backup of the replaced file: %q %v", b, err)
+	}
+}
+
+func TestBackupDirSymlink(t *testing.T) {
+	needSymlinks(t)
+	d := t.TempDir()
+	src, dst, outside := filepath.Join(d, "src"), filepath.Join(d, "dst"), t.TempDir()
+	write(t, filepath.Join(src, "doc"), []byte("new"))
+	touch(t, filepath.Join(src, "doc"), time.Hour)
+	os.Symlink(outside, filepath.Join(src, "bak"))
+	write(t, filepath.Join(dst, "doc"), []byte("old"))
+	xt(t, "-ab", "--backup-dir=bak", src+"/", dst)
+	if ents, _ := os.ReadDir(outside); len(ents) != 0 {
+		t.Errorf("backup written through a symlink: %v", ents)
+	}
+}
