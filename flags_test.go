@@ -274,7 +274,9 @@ func TestRelative(t *testing.T) {
 		}
 		dst2 := filepath.Join(d, "d2")
 		mustXT(t, "-aR", m.src(filepath.Join(src, "a.txt")), m.dst(dst2))
-		if !exists(filepath.Join(dst2, src, "a.txt")) {
+		// The path is kept without its leading slash (or drive on Windows).
+		rel := strings.TrimPrefix(src, filepath.VolumeName(src))
+		if !exists(filepath.Join(dst2, rel, "a.txt")) {
 			t.Errorf("-R with an absolute path: %v", snapshot(t, dst2))
 		}
 	})
@@ -386,8 +388,24 @@ func TestHardLinks(t *testing.T) {
 	})
 }
 
+// holesSupported reports whether the filesystem under dir keeps holes.
+func holesSupported(t *testing.T, dir string) bool {
+	p := filepath.Join(dir, "probe")
+	f, err := os.Create(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.WriteAt([]byte{1}, 4<<20)
+	f.Close()
+	defer os.Remove(p)
+	return blocks(t, p) < 1<<20
+}
+
 func TestSparse(t *testing.T) {
 	needUnix(t)
+	if !holesSupported(t, t.TempDir()) {
+		t.Skip("the temp filesystem does not support sparse files")
+	}
 	modes(t, func(t *testing.T, m mode) {
 		d := t.TempDir()
 		src, dst := filepath.Join(d, "s"), filepath.Join(d, "d")

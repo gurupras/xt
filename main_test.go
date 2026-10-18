@@ -424,7 +424,7 @@ func TestMissingRemoteXT(t *testing.T) {
 }
 
 func TestUsageErrors(t *testing.T) {
-	for _, args := range [][]string{{}, {"--bogus-flag", "a", "b"}, {"a:x", "b:y"}, {"-A", "a", "b"}} {
+	for _, args := range [][]string{{}, {"--bogus-flag", "a", "b"}, {"hosta:x", "hostb:y"}, {"-A", "a", "b"}} {
 		cmd := exec.Command(xtBin, args...)
 		out, err := cmd.CombinedOutput()
 		ee, ok := err.(*exec.ExitError)
