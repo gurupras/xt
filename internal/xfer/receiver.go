@@ -326,11 +326,6 @@ func (r *Receiver) prepare(i int) bool {
 		r.fail(e.Path, err)
 		return false
 	}
-	if r.Opts.HardLinks && e.HardLink > 0 && r.leaderOK[int(e.HardLink-1)] {
-		// Linked to its leader once the leader is in place.
-		r.links = append(r.links, i)
-		return false
-	}
 	st, statErr := os.Lstat(target)
 	exists := statErr == nil
 	switch e.Type {
@@ -361,6 +356,11 @@ func (r *Receiver) prepare(i int) bool {
 		if r.Opts.Verbose > 1 {
 			r.UI.Info("%s is newer on the receiver, skipping", e.Path)
 		}
+		return false
+	}
+	if r.Opts.HardLinks && e.HardLink > 0 && r.leaderOK[int(e.HardLink-1)] {
+		// Linked to its leader once the leader is in place.
+		r.links = append(r.links, i)
 		return false
 	}
 	regular := exists && st.Mode().IsRegular()

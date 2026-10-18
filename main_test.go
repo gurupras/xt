@@ -534,3 +534,27 @@ func TestBackupDirSymlink(t *testing.T) {
 		t.Errorf("backup written through a symlink: %v", ents)
 	}
 }
+
+func TestHardLinkFollowerFilters(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("hard links are not detected on Windows")
+	}
+	d := t.TempDir()
+	src := filepath.Join(d, "src")
+	write(t, filepath.Join(src, "a"), []byte("data"))
+	os.Link(filepath.Join(src, "a"), filepath.Join(src, "b"))
+
+	dst := filepath.Join(d, "ign")
+	write(t, filepath.Join(dst, "b"), []byte("keep"))
+	mustXT(t, "-aH", "--ignore-existing", src+"/", dst)
+	if b, _ := os.ReadFile(filepath.Join(dst, "b")); string(b) != "keep" {
+		t.Errorf("--ignore-existing overwrote a follower: %q", b)
+	}
+
+	dst = filepath.Join(d, "ex")
+	write(t, filepath.Join(dst, "a"), []byte("old"))
+	mustXT(t, "-aH", "--existing", src+"/", dst)
+	if _, err := os.Lstat(filepath.Join(dst, "b")); !os.IsNotExist(err) {
+		t.Error("--existing created a follower")
+	}
+}
