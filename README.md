@@ -25,6 +25,10 @@ xt speaks its own protocol. It talks only to xt, not to rsync.
 
 ## Install
 
+Prebuilt binaries for Linux, macOS and Windows (amd64 and arm64) are on the
+[releases page](https://github.com/gurupras/xt/releases), with a
+`SHA256SUMS` file. Or, with Go installed:
+
 ```
 go install github.com/gurupras/xt@latest
 ```
