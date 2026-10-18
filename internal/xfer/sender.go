@@ -179,6 +179,11 @@ func (s *Sender) handle(req *proto.Request) error {
 	if req.Index < 0 || int(req.Index) >= len(s.files) || s.files[req.Index].Type != proto.TypeFile {
 		return fmt.Errorf("protocol error: bad file index %d", req.Index)
 	}
+	if req.Sig != nil {
+		if err := req.Sig.Validate(); err != nil {
+			return fmt.Errorf("protocol error: %w", err)
+		}
+	}
 	f := &s.files[req.Index]
 	s.Stats.Transferred++
 	s.Stats.TransferredSize += f.Size

@@ -108,6 +108,22 @@ func TestNoSignature(t *testing.T) {
 	}
 }
 
+// A signature from a hostile peer must be rejected, not crash Generate.
+func TestGenerateRejectsBadSignature(t *testing.T) {
+	bad := []*Signature{
+		{BlockSize: 1 << 50, BasisSize: 1, Blocks: make([]BlockSig, 1)},
+		{BlockSize: -1, BasisSize: 1, Blocks: make([]BlockSig, 1)},
+		{BlockSize: 10, BasisSize: 5, Blocks: make([]BlockSig, 3)},
+		{BlockSize: 10, BasisSize: 31, Blocks: make([]BlockSig, 3)},
+	}
+	for _, sig := range bad {
+		_, err := Generate(bytes.NewReader(make([]byte, 100)), sig, func(Op) error { return nil })
+		if err == nil {
+			t.Errorf("block size %d, basis %d, %d blocks: accepted", sig.BlockSize, sig.BasisSize, len(sig.Blocks))
+		}
+	}
+}
+
 func TestApplyRejectsBadCopy(t *testing.T) {
 	sig := &Signature{BlockSize: 10, BasisSize: 25, Blocks: make([]BlockSig, 3)}
 	ap := NewApplier(bytes.NewReader(make([]byte, 25)), sig, &bytes.Buffer{})

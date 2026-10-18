@@ -42,6 +42,22 @@ type Signature struct {
 	Blocks    []BlockSig
 }
 
+// Validate checks that a signature received from a peer is consistent, so a
+// hostile one cannot drive oversized allocations or out-of-range slicing.
+func (s *Signature) Validate() error {
+	if len(s.Blocks) == 0 {
+		return nil
+	}
+	if s.BlockSize <= 0 || s.BlockSize > MaxBlockSize {
+		return fmt.Errorf("delta: invalid block size %d", s.BlockSize)
+	}
+	n, bs := int64(len(s.Blocks)), int64(s.BlockSize)
+	if s.BasisSize <= (n-1)*bs || s.BasisSize > n*bs {
+		return fmt.Errorf("delta: basis size %d does not match %d blocks of %d", s.BasisSize, n, bs)
+	}
+	return nil
+}
+
 func (s *Signature) blockLen(i int) int {
 	if i == len(s.Blocks)-1 {
 		return int(s.BasisSize - int64(i)*int64(s.BlockSize))
@@ -127,8 +143,11 @@ type Stats struct {
 // sig. If sig is nil or empty the whole file is emitted as literals. The Data
 // slice passed to emit is only valid for the duration of the call.
 func Generate(r io.Reader, sig *Signature, emit func(Op) error) (Stats, error) {
-	if sig == nil || len(sig.Blocks) == 0 || sig.BlockSize <= 0 {
+	if sig == nil || len(sig.Blocks) == 0 {
 		return literalOnly(r, emit)
+	}
+	if err := sig.Validate(); err != nil {
+		return Stats{}, err
 	}
 	g := &generator{
 		r:     r,
