@@ -434,3 +434,37 @@ func TestUsageErrors(t *testing.T) {
 		}
 	}
 }
+
+// The tests below pin behaviours where xt used to differ from rsync.
+
+func needSymlinks(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlinks need privileges on Windows")
+	}
+}
+
+func TestNoSpecialBitsWithoutPerms(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("no setuid bits on Windows")
+	}
+	d := t.TempDir()
+	src, dst := filepath.Join(d, "src"), filepath.Join(d, "dst")
+	write(t, filepath.Join(src, "prog"), []byte("x"))
+	os.Chmod(filepath.Join(src, "prog"), 0o755|fs.ModeSetuid)
+	os.Mkdir(filepath.Join(src, "dir"), 0o755)
+	os.Chmod(filepath.Join(src, "dir"), 0o755|fs.ModeSetgid|fs.ModeSticky)
+	mustXT(t, "-rt", src+"/", dst)
+	for _, p := range []string{"prog", "dir"} {
+		st, err := os.Stat(filepath.Join(dst, p))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if m := st.Mode() & (fs.ModeSetuid | fs.ModeSetgid | fs.ModeSticky); m != 0 {
+			t.Errorf("%s kept special bits %v without -p", p, m)
+		}
+	}
+	mustXT(t, "-a", src+"/", filepath.Join(d, "perms"))
+	if st, _ := os.Stat(filepath.Join(d, "perms", "prog")); st.Mode()&fs.ModeSetuid == 0 {
+		t.Error("-p dropped the setuid bit")
+	}
+}

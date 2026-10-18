@@ -743,7 +743,9 @@ func (r *Receiver) finalMode(e *proto.FileEntry, existing fs.FileInfo) fs.FileMo
 	if r.permsMeaningful() {
 		return fileMode(e.Mode)
 	}
-	mode := e.Mode &^ umask
+	// Like rsync, new files get only the source's rwx bits, never
+	// setuid, setgid or sticky.
+	mode := e.Mode & 0o777 &^ umask
 	if existing != nil {
 		mode = unixPerm(existing.Mode())
 	}
@@ -1256,7 +1258,7 @@ func (r *Receiver) finalizeDirs() {
 		case r.permsMeaningful():
 			mode = fileMode(e.Mode)
 		case d.created:
-			mode = fileMode(e.Mode &^ umask)
+			mode = fileMode(e.Mode & 0o777 &^ umask)
 		default:
 			continue
 		}
